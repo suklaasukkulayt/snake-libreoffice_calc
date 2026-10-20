@@ -3,6 +3,7 @@
 ## Info  
 This is the classic Snake game in [LibreOffice Calc](https://www.libreoffice.org/download/) (Excel but open-source and free).  
 This is made for the Wrong Tool Hack Club event.  
+See my Lapse timelapses for development info.  
 
 ## How to make it work  
 ### For this to work at all, you have to allow macros like so:  

@@ -18,6 +18,7 @@ See my Lapse timelapses for development info.
 3. Then you can close Form Controls.  
 
 ## How to play  
+First, download the .ods file from the [Releases](https://github.com/suklaasukkulayt/snake-libreoffice_calc/releases/tag/v1) tab.
 The game is in Sheet 2, ”Snake Game”  
 Default speed is 150  
 Press start, or enable arrow key control and press enter to start the game.  

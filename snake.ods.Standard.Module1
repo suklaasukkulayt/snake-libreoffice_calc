@@ -1,0 +1,565 @@
+Dim CurrentDirection As String
+Dim GameRunning As Boolean
+Global oXKeyHandler As Object
+Global oDocController As Object
+Global bListenerIsActive As Boolean
+
+Sub StartKeyHandler
+	On Error GoTo ErrorHandler
+	Dim oDoc As Object
+	oDoc = ThisComponent
+	
+	If bListenerIsActive Then
+		MsgBox "Arrow key control is already enabled! Restarting..."
+		Call StopKeyHandler
+	End If
+	
+	If oDoc.supportsService("com.sun.star.sheet.SpreadsheetDocument") Then
+		oDocController = oDoc.getCurrentController()
+		
+		oXKeyHandler = CreateUnoListener("KeyHandler_", "com.sun.star.awt.XKeyHandler")
+		oDocController.addKeyHandler(oXKeyHandler)
+		
+		bListenerIsActive = True
+		MsgBox "Started arrow key control!"
+	End If
+	Exit Sub
+ErrorHandler:
+	MsgBox "Error starting arrow key handler: " & Error$
+End Sub
+
+
+Sub StopKeyHandler
+	On Error GoTo ErrorHandler
+	
+	Dim oCurrentController As Object
+	oCurrentController = ThisComponent.getCurrentController()
+	
+	If Not IsNull(oXKeyHandler) And bListenerIsActive Then
+		oCurrentController.removeKeyHandler(oXKeyHandler)
+		DoEvents
+		MsgBox "Stopped arrow key control!"
+	Else
+		MsgBox "Arrow key control already stopped!"
+	End If
+	
+	oXKeyHandler = Nothing
+	oDocController = Nothing
+	bListenerIsActive = False
+	JustReset
+	GameRunning = False
+	Exit Sub
+ErrorHandler:
+	MsgBox "Error stopping arrow key control: " & Error$
+	bListenerIsActive = False
+End Sub
+
+
+Function KeyHandler_keyPressed(oEvent As Object) As Boolean
+	KeyHandler_keyPressed = False
+	
+	On Error GoTo KeyPressError
+	
+	Select Case oEvent.KeyCode
+		Case 1025
+			Call MoveUp
+			KeyHandler_keyPressed = True
+		
+		Case 1024
+			Call MoveDown
+			KeyHandler_keyPressed = True
+		
+		Case 1026
+			Call MoveLeft
+			KeyHandler_keyPressed = True
+		
+		Case 1027
+			Call MoveRight
+			KeyHandler_keyPressed = True
+		
+		Case 1280
+			Call StartGame
+			KeyHandler_keyPressed = True
+	End Select
+	Exit Function
+KeyPressError:
+	KeyHandler_keyPressed = False
+	MsgBox "Key press error: " & Error$
+End Function
+
+Function KeyHandler_keyReleased(oEvent As Object) As Boolean
+	KeyHandler_keyReleased = False
+End Function
+
+Sub KeyHandler_disposing(oEvent As Object)
+End Sub
+
+Sub Info
+    MsgBox "This is snake in LibreOffice Calc. You move with the buttons. The lighter green is your snake, the red is an apple"
+End Sub
+
+Sub StartGame
+	JustReset
+	CurrentDirection = "UP"
+	GameRunning = True
+    Dim oDoc As Object
+    Dim oSheet As Object
+	Dim oSpeedCell As Object
+	oDoc = ThisComponent
+	oSheet = oDoc.CurrentController.ActiveSheet
+	oSpeedCell = oSheet.getCellRangeByName("Speed")
+	
+	oSheet.unprotect("")
+	
+	Do While GameRunning
+		Select Case CurrentDirection
+			Case "UP"
+				PerformMove (0, -1)
+			Case "DOWN"
+				PerformMove(0, 1)
+			Case "LEFT"
+				PerformMove (-1, 0)
+			Case "RIGHT"
+				PerformMove(1, 0)
+		End Select
+		
+		DoEvents
+		Wait oSpeedCell.Value
+	Loop
+End Sub
+
+
+Sub MoveUp
+	If CurrentDirection <> "DOWN" Then
+		CurrentDirection = "UP"
+	End If
+End Sub
+
+Sub MoveDown
+	If CurrentDirection <> "UP" Then
+		CurrentDirection = "DOWN"
+	End If
+End Sub
+
+Sub MoveRight
+	If CurrentDirection <> "LEFT" Then
+		CurrentDirection = "RIGHT"
+	End If
+End Sub
+
+Sub MoveLeft
+	If CurrentDirection <> "RIGHT" Then
+		CurrentDirection = "LEFT"
+	End If
+End Sub
+
+Sub PerformMove(dCol As Long, dRow As Long)
+	Dim oDoc As Object
+	Dim oSheet As Object
+	Dim oCell As Object
+	Dim oTargetCell As Object
+	Dim nRow As Long
+	Dim nCol As Long
+	Dim i As Long
+	Dim oSegCell As Object
+	Dim oNamedRanges as Object
+	Dim oAppleCell As Object
+	Dim oReplaceCell As Object
+	Dim oSpeedCell As Object
+	Dim AteApple As Boolean
+	Dim oScoreCell As Object
+	Dim oBorderLine As New com.sun.star.table.BorderLine2
+	Dim oTableBorder As New com.sun.star.table.TableBorder2
+
+	AteApple = False
+	oDoc = ThisComponent
+	oSheet = oDoc.CurrentController.ActiveSheet
+	oNamedRanges = oDoc.NamedRanges
+    oBorderLine.Color = 0
+    oBorderLine.LineWidth = 0
+    oBorderLine.LineStyle = 0
+	oScoreCell = oSheet.getCellRangeByName("Score")
+	oSheet.unprotect("")
+    
+    oTableBorder.TopLine = oBorderLine
+    oTableBorder.BottomLine = oBorderLine
+    oTableBorder.LeftLine = oBorderLine
+    oTableBorder.RightLine = oBorderLine
+    oTableBorder.HorizontalLine = oBorderLine
+    oTableBorder.VerticalLine = oBorderLine
+    
+    oTableBorder.IsTopLineValid = True
+    oTableBorder.IsBottomLineValid = True
+    oTableBorder.IsLeftLineValid = True
+    oTableBorder.IsRightLineValid = True
+    oTableBorder.IsHorizontalLineValid = True
+    oTableBorder.IsVerticalLineValid = True
+	
+	If oNamedRanges.hasByName("Apple") Then
+		oAppleCell = oSheet.getCellRangeByName("Apple")
+	End If
+	
+	
+	
+	oCell = oSheet.getCellRangeByName("Snake")
+	oSpeedCell = oSheet.getCellRangeByName("Speed")
+	nRow = oCell.CellAddress.Row
+	nCol = oCell.CellAddress.Column
+	
+	Dim targetRow As Long
+	Dim targetCol As Long
+	targetRow = nRow + dRow
+	targetCol = nCol + dCol
+	
+	If targetRow >= 0 And targetCol >= 0 And targetRow < 20 And targetCol < 20 Then
+		oTargetCell = oSheet.getCellByPosition(targetCol, targetRow)
+		
+		If oNamedRanges.hasByName("Apple") Then
+			If oTargetCell.CellAddress.Column = oAppleCell.CellAddress.Column And _
+	   		   oTargetCell.CellAddress.Row = oAppleCell.CellAddress.Row Then
+				oNamedRanges.removeByName("Apple")
+				AteApple = True
+			End If
+		End If
+		
+	For i = 1 To oScoreCell.Value - 1
+		oSegCell = oSheet.getCellRangeByName("Snake" & (i + 1))
+		If oTargetCell.CellAddress.Column = oSegCell.CellAddress.Column And _
+   			oTargetCell.CellAddress.Row = oSegCell.CellAddress.Row Then
+   			GameRunning = False
+    		GameOver
+    		Exit Sub
+		End If
+	Next i
+		
+		oSheet.moveRange(oTargetCell.CellAddress, oCell.RangeAddress)
+		oDoc.CurrentController.select(oTargetCell)
+		
+		oReplaceCell = oSheet.getCellByPosition(nCol, nRow)
+		
+		If AteApple Then
+			oReplaceCell.CellBackColor = RGB(129, 212, 26)
+			ScoreUp nCol, nRow
+		Else
+			If oScoreCell.Value > 0 Then
+				MoveBody oDoc, oSheet, nCol, nRow, CLng(oScoreCell.Value)
+			Else
+				oReplaceCell.CellBackColor = RGB(21, 132, 102)
+				oReplaceCell.TableBorder2 = oTableBorder
+			End If
+		End If
+	Else
+		GameRunning = False
+		GameOver
+	End If
+	oSheet.protect("")
+End Sub
+
+Sub MoveBody(oDoc As Object, oSheet As Object, nHeadCol As Long, nHeadRow As Long, nLen As Long)
+	Dim i As Long
+	Dim oSegCell As Object
+	Dim oBorderLine As New com.sun.star.table.BorderLine2
+	Dim oTableBorder As New com.sun.star.table.TableBorder2
+	oSheet.getCellRangeByName("Snake1").CellBackColor = RGB(21, 132, 102)
+	
+	oBorderLine.Color = 0
+	oBorderLine.LineWidth = 0
+	oBorderLine.LineStyle = 0
+	
+	oTableBorder.TopLine = oBorderLine
+	oTableBorder.BottomLine = oBorderLine
+	oTableBorder.LeftLine = oBorderLine
+	oTableBorder.RightLine = oBorderLine
+	oTableBorder.HorizontalLine = oBorderLine
+	oTableBorder.VerticalLine = oBorderLine
+	
+	oTableBorder.IsTopLineValid = True
+	oTableBorder.IsBottomLineValid = True
+	oTableBorder.IsLeftLineValid = True
+	oTableBorder.IsRightLineValid = True
+	oTableBorder.IsHorizontalLineValid = True
+	oTableBorder.IsVerticalLineValid = True
+	
+	oSheet.getCellRangeByName("Snake1").TableBorder2 = oTableBorder
+	
+	For i = 1 To nLen - 1
+		Set oSegCell = oSheet.getCellRangeByName("Snake" & (i + 1))
+		SetSnakeName oDoc, "Snake" & i, oSegCell
+	Next i
+	
+	oSegCell = oSheet.getCellByPosition(nHeadCol, nHeadRow)
+	
+	oBorderLine.Color = RGB(0, 0, 0)
+	oBorderLine.LineWidth = 50
+	oBorderLine.LineStyle = 0
+	oTableBorder.TopLine = oBorderLine
+	oTableBorder.BottomLine = oBorderLine
+	oTableBorder.LeftLine = oBorderLine
+	oTableBorder.RightLine = oBorderLine
+	oTableBorder.HorizontalLine = oBorderLine
+	oTableBorder.VerticalLine = oBorderLine
+	oTableBorder.IsTopLineValid = True
+	oTableBorder.IsBottomLineValid = True
+	oTableBorder.IsLeftLineValid = True
+	oTableBorder.IsRightLineValid = True
+	oTableBorder.IsHorizontalLineValid = True
+	oTableBorder.IsVerticalLineValid = True
+	
+	oSegCell.CellBackColor = RGB(129, 212, 26)
+	SetSnakeName oDoc, "Snake" & nLen, oSegCell
+	oSegCell.TableBorder2 = oTableBorder
+End Sub
+
+Sub SetSnakeName(oDoc As Object, sName As String, oCell As Object)
+	If oDoc.NamedRanges.hasByName(sName) Then
+		oDoc.NamedRanges.removeByName(sName)
+	End If
+	oDoc.NamedRanges.addNewByName(sName, oCell.AbsoluteName, oCell.getCellAddress(), 0)
+End Sub
+
+Sub ScoreUp(nOldCol As Long, nOldRow As Long)
+	Dim oDoc As Object
+	Dim oSheet As Object
+	Dim oCell As Object
+	Dim oNamedRanges as Object
+	Dim cellValue As Double
+	Dim cellWinsValue As Double
+	Dim oSpeedCell As Object
+	Dim oScoreCell As Object
+	Dim oHighScoreCell As Object
+	Dim oWinsCell As Object
+	
+	Set oDoc = ThisComponent
+	Set oSheet = oDoc.CurrentController.ActiveSheet
+	oNamedRanges = oDoc.NamedRanges
+	oScoreCell = oSheet.getCellRangeByName("Score")
+	oHighScoreCell = oSheet.getCellRangeByName("HighScore")
+	oWinsCell = oSheet.getCellRangeByName("Wins")
+	
+	cellValue = oScoreCell.Value
+	oScoreCell.Value = cellValue + 1
+	
+	If oScoreCell.Value > oHighScoreCell.Value Then
+	oHighScoreCell.Value = oScoreCell.Value
+	End If
+	
+	If oScoreCell.Value = 400 Then
+	cellWinsValue = oWinsCell.Value
+	oWinsCell.Value = cellWinsValue + 1
+	MsgBox "YOU WIN!!!"
+	JustReset
+	End If
+	
+	NewApple nOldCol, nOldRow
+End Sub
+
+Sub NewApple(nOldCol As Long, nOldRow As Long)
+	Dim oDoc As Object
+	Dim oSheet As Object
+	Dim oCell As Object
+	Dim oAppleCell As Object
+	Dim minRow As Long, maxRow As Long
+    Dim minCol As Long, maxCol As Long
+    Dim randomRow As Long, randomCol As Long
+	Dim oNamedRanges as Object
+	Dim nCol As Long
+	Dim nRow As Long
+	Dim oScoreCell As Object
+	Dim oNewSnakeCell As Object
+	Dim i As Long
+	Dim bInvalidLocation As Boolean
+	Dim oSegCell As Object
+	Dim oBorderLine As New com.sun.star.table.BorderLine2
+	Dim oTableBorder As New com.sun.star.table.TableBorder2
+	
+	minCol = 0
+	maxCol = 19
+	minRow = 0
+	maxRow = 19
+	
+	oDoc = ThisComponent
+	oSheet = oDoc.CurrentController.ActiveSheet
+	oCell = oSheet.getCellRangeByName("Snake")
+	oScoreCell = oSheet.getCellRangeByName("Score")
+	
+	oBorderLine.Color = RGB(0, 0, 0)
+	oBorderLine.LineWidth = 50
+	oBorderLine.LineStyle = 0
+	oTableBorder.TopLine = oBorderLine
+	oTableBorder.BottomLine = oBorderLine
+	oTableBorder.LeftLine = oBorderLine
+	oTableBorder.RightLine = oBorderLine
+	oTableBorder.HorizontalLine = oBorderLine
+	oTableBorder.VerticalLine = oBorderLine
+	oTableBorder.IsTopLineValid = True
+	oTableBorder.IsBottomLineValid = True
+	oTableBorder.IsLeftLineValid = True
+	oTableBorder.IsRightLineValid = True
+	oTableBorder.IsHorizontalLineValid = True
+	oTableBorder.IsVerticalLineValid = True
+	
+	
+	Randomize
+	
+	Do
+		bInvalidLocation = False
+		randomCol = Int((maxCol - minCol + 1) * Rnd + minCol)
+		randomRow = Int((maxRow - minRow + 1) * Rnd + minRow)
+		nCol = oCell.CellAddress.Column
+		nRow = oCell.CellAddress.Row
+		
+		If randomCol = nCol And randomRow = nRow Then
+			bInvalidLocation = True
+		End If
+		
+		If Not bInvalidLocation And oScoreCell.Value > 0 Then
+			For i = 1 To oScoreCell.Value
+				If oDoc.NamedRanges.hasByName("Snake" & i) Then
+					oSegCell = oSheet.getCellRangeByName("Snake" & i)
+					If randomCol = oSegCell.CellAddress.Column And randomRow = oSegCell.CellAddress.Row Then
+						bInvalidLocation = True
+						Exit For
+					End If
+				End If
+			Next i
+		End If
+	Loop While bInvalidLocation
+				
+		
+	oAppleCell = oSheet.getCellByPosition(randomCol, randomRow)
+	oDoc.NamedRanges.addNewByName("Apple", oAppleCell.AbsoluteName, oAppleCell.getCellAddress(), 0)
+	oAppleCell.CellBackColor = RGB(255, 64, 0)
+	
+	
+	Set oNewSnakeCell = oSheet.getCellByPosition(nOldCol, nOldRow)
+	oNewSnakeCell.CellBackColor = RGB(129, 212, 26)
+	Dim snakeName As String
+	snakeName = "Snake" & oScoreCell.Value
+	
+	If oDoc.NamedRanges.hasByName(snakeName) Then
+		oDoc.NamedRanges.removeByName(snakeName)
+	End If
+	oDoc.NamedRanges.addNewByName(snakeName, oNewSnakeCell.AbsoluteName, oNewSnakeCell.getCellAddress(), 0)
+	oNewSnakeCell.TableBorder2 = oTableBorder
+	
+End Sub
+
+Sub GameOver
+	Dim oDoc As Object
+	Dim oSheet As Object
+	Dim oCell As Object
+	Dim oTargetCell As Object
+	Dim oSegCell As Object
+	Dim oReplaceCell As Object
+	Dim oScoreCell As Object
+	Dim nRow As Long
+	Dim nCol As Long
+	Set oDoc = ThisComponent
+	Set oSheet = oDoc.CurrentController.ActiveSheet
+	Dim oNamedRanges as Object
+	Dim i As Long
+	Dim oBorderLine As New com.sun.star.table.BorderLine2
+	Dim oTableBorder As New com.sun.star.table.TableBorder2
+	oCell = oSheet.getCellRangeByName("Snake")
+	CurrentDirection = "STOP"
+	oNamedRanges = oDoc.NamedRanges
+	nRow = oCell.CellAddress.Row
+	nCol = oCell.CellAddress.Column
+	oBorderLine.Color = 0
+	oBorderLine.LineWidth = 0
+	oBorderLine.LineStyle = 0
+	oTableBorder.TopLine = oBorderLine
+	oTableBorder.BottomLine = oBorderLine
+	oTableBorder.LeftLine = oBorderLine
+	oTableBorder.RightLine = oBorderLine
+	oTableBorder.HorizontalLine = oBorderLine
+	oTableBorder.VerticalLine = oBorderLine
+	oTableBorder.IsTopLineValid = True
+	oTableBorder.IsBottomLineValid = True
+	oTableBorder.IsLeftLineValid = True
+	oTableBorder.IsRightLineValid = True
+	oTableBorder.IsHorizontalLineValid = True
+	oTableBorder.IsVerticalLineValid = True
+	oSheet.unprotect("")
+	
+	GameRunning = False
+
+	oScoreCell = oSheet.getCellRangeByName("Score")
+	
+	MsgBox "Game Over! Score: " + oScoreCell.Value
+	For i = 1 To oScoreCell.Value
+		oSegCell = oSheet.getCellRangeByName("Snake" & i)
+		oSegCell.CellBackColor = RGB(21, 132, 102)
+		oDoc.NamedRanges.removeByName("Snake" & i)
+		oSegCell.TableBorder2 = oTableBorder
+	Next i
+	
+	oScoreCell.value = 0
+	Set oTargetCell = oSheet.getCellRangeByName("J10")
+	oSheet.moveRange(oTargetCell.CellAddress, oCell.RangeAddress)
+	oDoc.CurrentController.select(oTargetCell)
+	Set oReplaceCell = oSheet.getCellByPosition(nCol, nRow)
+	oReplaceCell.CellBackColor = RGB(21, 132, 102)
+	
+	oSheet.protect("")
+End Sub
+
+Sub JustReset
+	Dim oDoc As Object
+	Dim oSheet As Object
+	Dim oCell As Object
+	Dim oSegCell As Object
+	Dim oTargetCell As Object
+	Dim nRow As Long
+	Dim nCol As Long
+	oDoc = ThisComponent
+	oSheet = oDoc.CurrentController.ActiveSheet
+	Dim oNamedRanges as Object
+	Dim i As Long
+	Dim oBorderLine As New com.sun.star.table.BorderLine2
+	Dim oTableBorder As New com.sun.star.table.TableBorder2
+	oCell = oSheet.getCellRangeByName("Snake")
+	CurrentDirection = "STOP"
+	oNamedRanges = oDoc.NamedRanges
+	nRow = oCell.CellAddress.Row
+	nCol = oCell.CellAddress.Column
+	oSheet.unprotect("")
+	
+	oBorderLine.Color = 0
+	oBorderLine.LineWidth = 0
+	oBorderLine.LineStyle = 0
+	oTableBorder.TopLine = oBorderLine
+	oTableBorder.BottomLine = oBorderLine
+	oTableBorder.LeftLine = oBorderLine
+	oTableBorder.RightLine = oBorderLine
+	oTableBorder.HorizontalLine = oBorderLine
+	oTableBorder.VerticalLine = oBorderLine
+	oTableBorder.IsTopLineValid = True
+	oTableBorder.IsBottomLineValid = True
+	oTableBorder.IsLeftLineValid = True
+	oTableBorder.IsRightLineValid = True
+	oTableBorder.IsHorizontalLineValid = True
+	oTableBorder.IsVerticalLineValid = True
+	
+	GameRunning = False
+
+	oScoreCell = oSheet.getCellRangeByName("Score")
+	
+	For i = 1 To oScoreCell.Value
+		oSegCell = oSheet.getCellRangeByName("Snake" & i)
+		oSegCell.CellBackColor = RGB(21, 132, 102)
+		oDoc.NamedRanges.removeByName("Snake" & i)
+		oSegCell.TableBorder2 = oTableBorder
+	Next i
+	
+	oScoreCell.value = 0
+	Set oTargetCell = oSheet.getCellRangeByName("J10")
+	If oCell.AbsoluteName <> oTargetCell.AbsoluteName Then
+	oSheet.moveRange(oTargetCell.CellAddress, oCell.RangeAddress)
+	oDoc.CurrentController.select(oTargetCell)
+	Set oReplaceCell = oSheet.getCellByPosition(nCol, nRow)
+	oReplaceCell.CellBackColor = RGB(21, 132, 102)
+	End If
+	
+	oSheet.protect("")
+End Sub
